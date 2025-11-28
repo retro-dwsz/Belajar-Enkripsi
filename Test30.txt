@@ -1,0 +1,4 @@
+Input = Halo, dunia!
+Iterations = 10
+
+Ouput:
