@@ -1,173 +1,147 @@
 #include <cstdint>
+#include <cstdlib>
 #include <exception>
-#include <fstream>
+
+#include <Tools/Files.hpp>
 #include <fmt/format.h>
 #include <fmt/ranges.h>
 
 #include <argparse/argparse.hpp>
-#include <cppcodec/base64_rfc4648.hpp>
 #include <limits>
 #include <stdexcept>
+
+#include <cppcodec/base64_rfc4648.hpp>
 
 using str = std::string;
 constexpr __uint128_t U128MAX = std::numeric_limits<__uint128_t>::max();
 
 void PrintText(const str& Text){
     fmt::println(
-        "Input\t{} chars, {} bytes at {:p}\n-> {}\n",
-        Text.length(), sizeof(Text), fmt::ptr(&Text), Text
+        "Input\t{} chars, {} B at {:p}\n-> {}\n",
+        Text.length(), Text.size(), fmt::ptr(&Text), Text
     );
 }
 
-std::string ReadFile(const std::string& path){
-    std::ifstream in(path, std::ios::binary);
+namespace Lv0::Base64 {
+    void Encode(const str& Text, const int& Depth, const bool& Force, const bool& PrintDepth, const str& File){
+        fmt::println("{}\n", fmt::format("{:-^30}", " Encoding "));
+        PrintText(Text);
+        auto Output = Text;
 
-    if(!in) throw std::runtime_error("Cannot open: " + path);
-
-    return std::string(
-        std::istreambuf_iterator<char>(in),
-        std::istreambuf_iterator<char>()
-    );
-}
-
-void WriteTo(const str& File, const str& Content){
-    if(File == "__NONE__"){
-        return;
-    } else {
-        std::fstream Out(File, std::ios::out | std::ios::trunc);
-
-        if(Out.is_open()){
-            try{
-                Out.write(Content.data(), Content.size());
-                // Out << Content << "\n\n";
-                Out.close();
-            } catch (std::exception& e){
-                fmt::println("Error while writing to file -> {}", e.what());
-            }
-        } else {
-            throw std::domain_error("Failed to open");
-        }
-    }
-}
-
-void Encode(const str& Text, const int& Depth, const bool& Force, const bool& PrintDepth, const str& File){
-    fmt::println("{}\n", fmt::format("{:-^30}", " Encoding "));
-    PrintText(Text);
-    auto Output = Text;
-
-    for(int i = 1; i <= Depth; i++){
-        Output = cppcodec::base64_rfc4648::encode(Output);
-        if(PrintDepth){ fmt::println("(it {}) {}", i, Output); };
-    }
-
-    if(File == "__NONE__"){
-        fmt::println(
-            "\nOutput\t{} chars, {} bytes at {:p}, {} iterations\n-> {}\n",
-            Output.length(), sizeof(Output), fmt::ptr(&Output), Depth, Output
-        );
-    } else {
-        fmt::println(
-            "\nOutput\t{} chars, {} bytes at {:p}, {} iterations\n-> {}... (written in {})\n",
-            Output.length(), sizeof(Output), fmt::ptr(&Output), Depth, Output.substr(0, 5), File
-        );
-
-        auto Content = fmt::format(
-            "Input = {}\nIterations = {}\n\nOuput:{}\n",
-            Text, Depth, Output
-        );
-        WriteTo(File, Content);
-    }
-};
-
-void Decode(const str& Encoded, const int& Depth, const bool& PrintDepth, const str& File){
-    fmt::println("{}\n", fmt::format("{:-^30}", " Decoding "));
-    PrintText(Encoded);
-
-    str Output = Encoded;
-    std::vector<uint8_t> Bytes;
-
-    int it;
-    try{
         for(int i = 1; i <= Depth; i++){
-            Bytes  = cppcodec::base64_rfc4648::decode(Output);
-            Output = str(Bytes.begin(), Bytes.end());
-
-            it = i;
-
+            Output = cppcodec::base64_rfc4648::encode(Output);
             if(PrintDepth){ fmt::println("(it {}) {}", i, Output); };
         }
-    } catch(const std::exception& e){
-        fmt::println("Too many iterations, returning last iteration ({}) \nError -> {}", it, e.what());
-        std::exit(1);
-    }
 
-    if(File == "__NONE__"){
-        fmt::println(
-            "\nOutput\t{} chars, {} bytes at {:p}, {} iterations\n Str   -> {}\n Bytes -> {}",
-            Output.length(), sizeof(Output), fmt::ptr(&Output), it, Output, Bytes
-        );
-    } else {
-        fmt::println(
-            "\nOutput\t{} chars, {} bytes at {:p}, {} iterations\n Str   -> {}\n Bytes -> {}",
-            Output.length(), sizeof(Output), fmt::ptr(&Output), it, Output, Bytes
-        );
-        auto Content = fmt::format(
-            "Input ({} chars):\n-> {}\nOutput ({} chars)\n-> {}",
-            Encoded.length(), Encoded, Output.length(), Output
-        );
-        WriteTo(File, Content);
-    }
-}
-
-void ForceDecode(const str& Encoded, const bool& PrintDepth, const str& File){
-    fmt::println("{}\n", fmt::format("{:-^30}", " Decoding "));
-    PrintText(Encoded);
-
-    str Output = Encoded;
-    std::vector<uint8_t> Bytes;
-
-    str Depth = "";
-
-    int it;
-    try{
-        for(__uint128_t i = 1; i <= U128MAX; i++){
-            Bytes  = cppcodec::base64_rfc4648::decode(Output);
-            Output = str(Bytes.begin(), Bytes.end());
-
-            it = i;
-
-            if(PrintDepth){
-                auto tx =  fmt::format("(it {}) {}", i, Output);
-                fmt::println("{}", tx);
-                Depth += fmt::format("{}\n", tx);
-            };
-        }
-    } catch(const std::exception& e){
-        if(Encoded == Output){
-            throw std::invalid_argument("Invalid string!");
+        if(File == "__NONE__"){
+            fmt::println(
+                "\nOutput\t{} chars, {} KB at {:p}, {} iterations\n-> {}\n",
+                Output.length(), (double)(Output.size()/1024.0), fmt::ptr(&Output), Depth, Output
+            );
         } else {
-            fmt::println("Found depth ({})", it);
+            fmt::println(
+                "\nOutput\t{} chars, {} KB at {:p}, {} iterations\n-> {}... (written in {})\n",
+                Output.length(), (double)(Output.size()/1024.0), fmt::ptr(&Output), Depth, Output.substr(0, 5), File
+            );
+
+            auto Content = fmt::format(
+                "Input = {}\nIterations = {}\n\nOuput:{}\n",
+                Text, Depth, Output
+            );
+            Tools::Files::WriteFile(File, Content);
+        }
+    };
+
+    void Decode(const str& Encoded, const int& Depth, const bool& PrintDepth, const str& File){
+        fmt::println("{}\n", fmt::format("{:-^30}", " Decoding "));
+        PrintText(Encoded);
+
+        str Output = Encoded;
+        std::vector<uint8_t> Bytes;
+
+        int it;
+        try{
+            for(int i = 1; i <= Depth; i++){
+                Bytes  = cppcodec::base64_rfc4648::decode(Output);
+                Output = str(Bytes.begin(), Bytes.end());
+
+                it = i;
+
+                if(PrintDepth){ fmt::println("(it {}) {}", i, Output); };
+            }
+        } catch(const std::exception& e){
+            fmt::println("Too many iterations, returning last iteration ({}) \nError -> {}", it, e.what());
+            std::exit(1);
+        }
+
+        if(File == "__NONE__"){
+            fmt::println(
+                "\nOutput\t{} chars, {} KB at {:p}, {} iterations\n Str   -> {}\n Bytes -> {}",
+                Output.length(), sizeof(Output), fmt::ptr(&Output), it, Output, Bytes
+            );
+        } else {
+            fmt::println(
+                "\nOutput\t{} chars, {} KB at {:p}, {} iterations\n Str   -> {}\n Bytes -> {}",
+                Output.length(), (double)(Output.size()/1024.0), fmt::ptr(&Output), it, Output, Bytes
+            );
+            auto Content = fmt::format(
+                "Input ({} chars):\n-> {}\nOutput ({} chars)\n-> {}",
+                Encoded.length(), Encoded, Output.length(), Output
+            );
+            Tools::Files::WriteFile(File, Content);
         }
     }
 
-    if(File == "__NONE__"){
-        fmt::println(
-            "\nOutput\t{} chars, {} bytes at {:p}, {} iterations\n Str   -> {}\n Bytes -> {}",
-            Output.length(), sizeof(Output), fmt::ptr(&Output), it, Output, Bytes
-        );
-    } else {
-        fmt::println(
-            "\nOutput\t{} chars, {} bytes at {:p}, {} iterations\n Str   -> {}\n Bytes -> {}",
-            Output.length(), sizeof(Output), fmt::ptr(&Output), it, Output, Bytes
-        );
-        auto Content = fmt::format(
-            "Input ({} chars):\n-> {}\nIterations:\n{}\nOutput ({} chars)\n-> {}",
-            Encoded.length(), Encoded, Depth, Output.length(), Output
-        );
-        WriteTo(File, Content);
+    void ForceDecode(const str& Encoded, const bool& PrintDepth, const str& File){
+        fmt::println("{}\n", fmt::format("{:-^30}", " Decoding "));
+        PrintText(Encoded);
+
+        str Output = Encoded;
+        std::vector<uint8_t> Bytes;
+
+        str Depth = "";
+
+        int it;
+        try{
+            for(__uint128_t i = 1; i <= U128MAX; i++){
+                Bytes  = cppcodec::base64_rfc4648::decode(Output);
+                Output = str(Bytes.begin(), Bytes.end());
+
+                it = i;
+
+                if(PrintDepth){
+                    auto tx =  fmt::format("(it {}) {}", i, Output);
+                    fmt::println("{}", tx);
+                    Depth += fmt::format("{}\n", tx);
+                };
+            }
+        } catch(const std::exception& e){
+            if(Encoded == Output){
+                throw std::invalid_argument("Invalid string!");
+                std::exit(3);
+            } else {
+                fmt::println("Found depth ({})", it);
+            }
+        }
+
+        if(File == "__NONE__"){
+            fmt::println(
+                "\nOutput\t{} chars, {} KB at {:p}, {} iterations\n Str   -> {}\n Bytes -> {}",
+                Output.length(), (double)(Output.size()/1024.0), fmt::ptr(&Output), it, Output, Bytes
+            );
+        } else {
+            fmt::println(
+                "\nOutput\t{} chars, {} KB at {:p}, {} iterations\n Str   -> {}\n Bytes -> {}",
+                Output.length(), (double)(Output.size()/1024.0), fmt::ptr(&Output), it, Output, Bytes
+            );
+            auto Content = fmt::format(
+                "Input ({} chars):\n-> {}\nIterations:\n{}\nOutput ({} chars)\n-> {}",
+                Encoded.length(), Encoded, Depth, Output.length(), Output
+            );
+            Tools::Files::WriteFile(File, Content);
+        }
     }
 }
-
 
 int main(const int argc, const char** argv){
     argparse::ArgumentParser Args("Level0");
@@ -217,7 +191,7 @@ int main(const int argc, const char** argv){
 
     if(Text.substr(0, 8) == "__FILE__" && Text.substr(Text.length()-4, Text.length()) == ".txt"){
         str FileToRead = Text.substr(8, Text.length());
-        Text = ReadFile(FileToRead);
+        Text = Tools::Files::ReadFile(FileToRead);
     }
 
     if(Depth >= 30 && !Force){
@@ -235,18 +209,18 @@ int main(const int argc, const char** argv){
     try {
         if(Mode == "E" || Mode == "e"){
 
-            Encode(Text, Depth, Force, PrintDepth, File);
+            Lv0::Base64::Encode(Text, Depth, Force, PrintDepth, File);
 
         } else if (Mode == "D" || Mode == "d"){
 
-            Decode(Text, Depth, PrintDepth, File);
+            Lv0::Base64::Decode(Text, Depth, PrintDepth, File);
 
         } else if(Mode == "DF" || Mode == "df"){
 
-            ForceDecode(Text, PrintDepth, File);
+            Lv0::Base64::ForceDecode(Text, PrintDepth, File);
 
         } else {
-            fmt::println("Invalid mode! (E/D)");
+            fmt::println("Invalid mode! (E/D/DF)");
         }
 
     } catch(const std::exception& e){
